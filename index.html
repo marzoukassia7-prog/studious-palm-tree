@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OrthoView — DICOM Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=Jost:wght@200;300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream:#f5f0e8;--ivory:#ede7d9;--sand:#d9cfbd;--taupe:#b8a99a;
+    --umber:#8c7b6e;--espresso:#4a3b32;--charcoal:#2e2520;--warm-white:#faf8f4;
+    --gold:#c8a96e;--gold-light:#e2c98a;--rust:#a05c3a;--sage:#7a8c6e;
+    --radius-sm:4px;--radius-md:10px;--radius-lg:20px;
+    --shadow:0 8px 40px rgba(74,59,50,.13);--shadow-lg:0 24px 80px rgba(74,59,50,.18);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Jost',sans-serif;font-weight:300;background:var(--cream);color:var(--espresso);min-height:100vh;overflow-x:hidden}
+
+  /* SPLASH */
+  #splash{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--charcoal);transition:opacity .9s ease,transform .9s ease}
+  #splash.hide{opacity:0;pointer-events:none;transform:translateY(-30px)}
+  .splash-bg{position:absolute;inset:0;background-image:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(200,169,110,.08) 0%,transparent 70%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800' viewBox='0 0 800 800'%3E%3Cg opacity='0.05'%3E%3Ccircle cx='400' cy='400' r='350' stroke='%23c8a96e' stroke-width='1' fill='none'/%3E%3Ccircle cx='400' cy='400' r='280' stroke='%23c8a96e' stroke-width='.6' fill='none'/%3E%3Ccircle cx='400' cy='400' r='200' stroke='%23c8a96e' stroke-width='.4' fill='none'/%3E%3Cline x1='50' y1='400' x2='750' y2='400' stroke='%23c8a96e' stroke-width='.5'/%3E%3Cline x1='400' y1='50' x2='400' y2='750' stroke='%23c8a96e' stroke-width='.5'/%3E%3C/g%3E%3C/svg%3E");background-size:cover,700px 700px;background-position:center,center;background-repeat:no-repeat,no-repeat}
+  .splash-bg::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 4px);pointer-events:none}
+  .splash-content{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:0;animation:fadeUp 1.2s ease forwards}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+  .splash-cross{width:60px;height:60px;margin-bottom:28px;position:relative;animation:fadeUp 1.2s .1s ease both}
+  .splash-cross::before,.splash-cross::after{content:'';position:absolute;background:var(--gold);border-radius:2px}
+  .splash-cross::before{width:6px;height:60px;left:50%;transform:translateX(-50%);top:0}
+  .splash-cross::after{width:60px;height:6px;top:50%;transform:translateY(-50%);left:0}
+  .splash-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(3.5rem,10vw,6.5rem);letter-spacing:.08em;color:var(--warm-white);line-height:1;animation:fadeUp 1.2s .2s ease both}
+  .splash-subtitle{font-family:'Jost',sans-serif;font-weight:200;font-size:.75rem;letter-spacing:.55em;text-transform:uppercase;color:var(--gold);margin-top:10px;animation:fadeUp 1.2s .35s ease both}
+  .splash-divider{width:120px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:32px 0;animation:fadeUp 1.2s .45s ease both}
+  .splash-by{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.3rem;color:var(--sand);letter-spacing:.05em;animation:fadeUp 1.2s .55s ease both}
+  .splash-name{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:1.7rem;color:var(--gold-light);letter-spacing:.12em;text-transform:uppercase;animation:fadeUp 1.2s .65s ease both}
+  .splash-btn{margin-top:52px;padding:14px 52px;background:transparent;border:1px solid var(--gold);color:var(--gold-light);font-family:'Jost',sans-serif;font-weight:300;font-size:.78rem;letter-spacing:.4em;text-transform:uppercase;cursor:pointer;border-radius:var(--radius-sm);transition:background .3s,color .3s,transform .2s;animation:fadeUp 1.2s .8s ease both}
+  .splash-btn:hover{background:var(--gold);color:var(--charcoal);transform:translateY(-2px)}
+
+  /* APP */
+  #app{display:none;min-height:100vh;flex-direction:column;background:var(--cream)}
+  #app.visible{display:flex}
+
+  /* HEADER */
+  header{background:var(--charcoal);padding:0 36px;height:60px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 30px rgba(0,0,0,.2);position:sticky;top:0;z-index:100}
+  .header-logo{display:flex;align-items:center;gap:14px}
+  .hcross{width:20px;height:20px;position:relative}
+  .hcross::before,.hcross::after{content:'';position:absolute;background:var(--gold);border-radius:1px}
+  .hcross::before{width:3px;height:20px;left:50%;transform:translateX(-50%)}
+  .hcross::after{width:20px;height:3px;top:50%;transform:translateY(-50%)}
+  .header-name{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.4rem;color:var(--warm-white);letter-spacing:.1em}
+  .header-tag{font-size:.62rem;letter-spacing:.4em;text-transform:uppercase;color:var(--gold);font-weight:200}
+  .header-right{display:flex;align-items:center;gap:20px}
+  .header-pill{font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;color:var(--taupe);font-weight:300;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .header-new-btn{padding:7px 22px;background:transparent;border:1px solid rgba(200,169,110,.4);color:var(--gold);border-radius:var(--radius-sm);font-family:'Jost',sans-serif;font-size:.68rem;font-weight:300;letter-spacing:.25em;text-transform:uppercase;cursor:pointer;transition:background .25s,border-color .25s}
+  .header-new-btn:hover{background:rgba(200,169,110,.12);border-color:var(--gold)}
+
+  /* UPLOAD */
+  #upload-section{flex:1;display:flex;align-items:center;justify-content:center;padding:60px 40px;flex-direction:column;gap:40px;animation:fadeUp .7s ease}
+  .upload-intro{text-align:center;max-width:540px}
+  .upload-intro h2{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:2.4rem;color:var(--espresso);margin-bottom:10px}
+  .upload-intro p{color:var(--umber);font-size:.88rem;font-weight:300;line-height:1.7;letter-spacing:.02em}
+  .upload-zone{width:100%;max-width:600px;border:1.5px dashed var(--taupe);border-radius:var(--radius-lg);padding:60px 40px;text-align:center;cursor:pointer;transition:border-color .3s,background .3s,transform .2s;background:var(--warm-white)}
+  .upload-zone:hover,.upload-zone.drag-over{border-color:var(--gold);background:var(--ivory);transform:translateY(-3px);box-shadow:var(--shadow)}
+  .upload-icon{width:60px;height:60px;margin:0 auto 20px;opacity:.5}
+  .upload-zone h3{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.5rem;color:var(--espresso);margin-bottom:8px}
+  .upload-zone p{font-size:.8rem;color:var(--umber);font-weight:300;letter-spacing:.04em}
+  #file-input{display:none}
+  .upload-btn{margin-top:26px;display:inline-block;padding:12px 38px;background:var(--espresso);color:var(--cream);border:none;border-radius:var(--radius-sm);font-family:'Jost',sans-serif;font-size:.76rem;font-weight:300;letter-spacing:.3em;text-transform:uppercase;cursor:pointer;transition:background .3s,transform .2s}
+  .upload-btn:hover{background:var(--charcoal);transform:translateY(-1px)}
+
+  /* VIEWER */
+  #viewer-section{display:none;flex:1;padding:26px 32px;gap:24px}
+  #viewer-section.visible{display:grid;grid-template-columns:1fr 350px}
+
+  /* CANVAS PANEL */
+  .canvas-panel{background:var(--charcoal);border-radius:var(--radius-md);overflow:hidden;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;position:relative}
+  .canvas-toolbar{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:rgba(46,37,32,.97);border-bottom:1px solid rgba(255,255,255,.06)}
+  .toolbar-info{font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;color:var(--taupe);font-weight:300}
+  .toolbar-badges{display:flex;gap:8px}
+  .badge{padding:3px 10px;border-radius:20px;font-size:.63rem;font-weight:400;letter-spacing:.15em;text-transform:uppercase}
+  .badge-modality{background:rgba(200,169,110,.15);color:var(--gold);border:1px solid rgba(200,169,110,.3)}
+  .badge-wl{background:rgba(122,140,110,.15);color:var(--sage);border:1px solid rgba(122,140,110,.3);font-variant-numeric:tabular-nums}
+  .canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;background:#181310;min-height:460px;position:relative}
+  #dicom-canvas{max-width:100%;max-height:100%;border-radius:2px;cursor:crosshair}
+  .cov{position:absolute;font-size:.65rem;font-family:'Jost',monospace;font-weight:300;color:rgba(200,169,110,.5);letter-spacing:.08em;padding:6px;line-height:1.5}
+  .cov-tl{top:20px;left:22px}.cov-tr{top:20px;right:22px;text-align:right}
+  .cov-bl{bottom:20px;left:22px}.cov-br{bottom:20px;right:22px;text-align:right}
+
+  /* SLIDERS */
+  .slider-panel{padding:14px 16px;background:rgba(46,37,32,.97);border-top:1px solid rgba(255,255,255,.06);display:flex;gap:22px}
+  .slider-group{flex:1}
+  .slider-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .slider-label span:first-child{font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--taupe);font-weight:300}
+  .slider-val{font-size:.76rem;font-weight:400;color:var(--gold-light);font-variant-numeric:tabular-nums;min-width:50px;text-align:right}
+  input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:rgba(255,255,255,.1);border-radius:2px;outline:none;cursor:pointer;transition:background .2s}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px rgba(200,169,110,.4);cursor:pointer;transition:transform .15s,box-shadow .15s}
+  input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.25);box-shadow:0 0 14px rgba(200,169,110,.6)}
+  input[type=range]:hover{background:rgba(255,255,255,.15)}
+
+  /* RIGHT PANEL */
+  .right-panel{display:flex;flex-direction:column;gap:18px;overflow-y:auto;max-height:calc(100vh - 108px);padding-right:2px}
+  .right-panel::-webkit-scrollbar{width:4px}
+  .right-panel::-webkit-scrollbar-thumb{background:var(--sand);border-radius:4px}
+  .meta-card{background:var(--warm-white);border-radius:var(--radius-md);box-shadow:var(--shadow);overflow:hidden}
+  .meta-card-header{padding:12px 18px;background:var(--espresso);display:flex;align-items:center;gap:10px}
+  .meta-card-header span{font-size:.68rem;letter-spacing:.28em;text-transform:uppercase;color:var(--gold-light);font-weight:300}
+  .mci{width:15px;height:15px;opacity:.7}
+  .meta-body{padding:16px 18px;display:flex;flex-direction:column;gap:9px}
+  .meta-row{display:flex;gap:10px;padding-bottom:9px;border-bottom:1px solid var(--ivory);align-items:flex-start}
+  .meta-row:last-child{border-bottom:none;padding-bottom:0}
+  .meta-key{font-size:.67rem;color:var(--taupe);letter-spacing:.1em;text-transform:uppercase;min-width:105px;font-weight:300;padding-top:1px;flex-shrink:0}
+  .meta-value{font-size:.8rem;color:var(--espresso);font-weight:400;word-break:break-word;flex:1}
+  .meta-value.hl{color:var(--rust);font-weight:500}
+
+  /* TAGS TABLE */
+  .tags-search{padding:10px 18px 0}
+  .tags-search input{width:100%;padding:8px 13px;border:1px solid var(--sand);border-radius:var(--radius-sm);background:var(--cream);font-family:'Jost',sans-serif;font-size:.78rem;font-weight:300;color:var(--espresso);outline:none;transition:border-color .2s}
+  .tags-search input:focus{border-color:var(--gold)}
+  .tags-search input::placeholder{color:var(--taupe)}
+  .tags-table{width:100%;border-collapse:collapse;font-size:.72rem}
+  .tags-table-wrap{max-height:300px;overflow-y:auto;padding:10px 0 14px}
+  .tags-table-wrap::-webkit-scrollbar{width:3px}
+  .tags-table-wrap::-webkit-scrollbar-thumb{background:var(--sand);border-radius:3px}
+  .tags-table thead th{padding:7px 18px;text-align:left;font-size:.63rem;letter-spacing:.2em;text-transform:uppercase;color:var(--taupe);font-weight:400;position:sticky;top:0;background:var(--warm-white);border-bottom:1px solid var(--ivory)}
+  .tags-table tbody tr{border-bottom:1px solid var(--ivory);transition:background .15s}
+  .tags-table tbody tr:hover{background:var(--cream)}
+  .tags-table tbody td{padding:6px 18px;color:var(--espresso);vertical-align:top}
+  .tags-table tbody td:first-child{font-family:'Courier New',monospace;font-size:.65rem;color:var(--gold);white-space:nowrap}
+  .tags-table tbody td:nth-child(2){color:var(--umber);font-size:.7rem}
+  .tags-table tbody td:last-child{word-break:break-all;font-size:.71rem}
+  .reset-btn{margin:4px 18px 14px;padding:8px 18px;background:transparent;border:1px solid var(--sand);color:var(--umber);border-radius:var(--radius-sm);font-family:'Jost',sans-serif;font-size:.7rem;font-weight:300;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;transition:background .25s,border-color .25s}
+  .reset-btn:hover{background:var(--ivory);border-color:var(--taupe)}
+
+  /* LOADING & TOAST */
+  #loading-overlay{display:none;position:fixed;inset:0;background:rgba(46,37,32,.75);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+  #loading-overlay.show{display:flex}
+  .loader-ring{width:52px;height:52px;border:2px solid rgba(200,169,110,.2);border-top-color:var(--gold);border-radius:50%;animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loader-text{font-size:.72rem;letter-spacing:.3em;text-transform:uppercase;color:var(--gold-light);font-weight:300}
+  #toast{display:none;position:fixed;bottom:30px;right:30px;background:var(--espresso);color:var(--cream);padding:13px 20px;border-radius:var(--radius-md);font-size:.78rem;font-weight:300;border-left:3px solid var(--rust);box-shadow:var(--shadow-lg);z-index:600;animation:slideIn .3s ease;max-width:320px}
+  #toast.show{display:block}
+  @keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+  @media(max-width:900px){
+    #viewer-section.visible{grid-template-columns:1fr}
+    .right-panel{max-height:unset}
+  }
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="splash-bg"></div>
+  <div class="splash-content">
+    <div class="splash-cross"></div>
+    <div class="splash-title">OrthoView</div>
+    <div class="splash-subtitle">Diagnostic Imaging Platform</div>
+    <div class="splash-divider"></div>
+    <div class="splash-by">by</div>
+    <div class="splash-name">Marzouk Assia</div>
+    <button class="splash-btn" onclick="enterApp()">Accéder &nbsp;→</button>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading-overlay">
+  <div class="loader-ring"></div>
+  <div class="loader-text">Lecture du fichier DICOM…</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="header-logo">
+      <div class="hcross"></div>
+      <div>
+        <div class="header-name">OrthoView</div>
+        <div class="header-tag">DICOM Viewer</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="header-pill" id="file-status">Aucun fichier chargé</span>
+      <button class="header-new-btn" onclick="resetViewer()">Nouveau fichier</button>
+    </div>
+  </header>
+
+  <!-- UPLOAD -->
+  <section id="upload-section">
+    <div class="upload-intro">
+      <h2>Visualisation d'images DICOM</h2>
+      <p>Chargez votre fichier DICOM pour visualiser l'image médicale avec contrôle du fenêtrage (WC / WW) et consultation de l'ensemble des métadonnées.</p>
+    </div>
+    <div class="upload-zone" id="drop-zone"
+         onclick="document.getElementById('file-input').click()"
+         ondragover="handleDragOver(event)"
+         ondragleave="handleDragLeave(event)"
+         ondrop="handleDrop(event)">
+      <svg class="upload-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="8" y="4" width="36" height="48" rx="4" stroke="#8c7b6e" stroke-width="2"/>
+        <path d="M32 4v14h14" stroke="#8c7b6e" stroke-width="2"/><path d="M44 4l10 10" stroke="#8c7b6e" stroke-width="2"/>
+        <circle cx="48" cy="46" r="12" fill="#f5f0e8" stroke="#c8a96e" stroke-width="2"/>
+        <path d="M48 40v12M42 46h12" stroke="#c8a96e" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <h3>Déposer un fichier DICOM</h3>
+      <p>Glissez-déposez votre fichier .dcm ici, ou cliquez pour parcourir</p>
+      <input type="file" id="file-input" accept=".dcm,.dicom,*" onchange="loadFile(this.files[0])">
+      <button class="upload-btn" onclick="event.stopPropagation();document.getElementById('file-input').click()">Parcourir les fichiers</button>
+    </div>
+  </section>
+
+  <!-- VIEWER -->
+  <section id="viewer-section">
+    <div class="canvas-panel">
+      <div class="canvas-toolbar">
+        <span class="toolbar-info" id="toolbar-dims">—</span>
+        <div class="toolbar-badges">
+          <span class="badge badge-modality" id="badge-modality">—</span>
+          <span class="badge badge-wl" id="badge-wl">WC — | WW —</span>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="dicom-canvas"></canvas>
+        <div class="cov cov-tl" id="ov-patient"></div>
+        <div class="cov cov-tr" id="ov-study"></div>
+        <div class="cov cov-bl" id="ov-pixel"></div>
+        <div class="cov cov-br" id="ov-date"></div>
+      </div>
+      <div class="slider-panel">
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Centre (WC)</span>
+            <span class="slider-val" id="wc-val">—</span>
+          </div>
+          <input type="range" id="slider-wc" min="-2000" max="3000" step="1" oninput="updateWindowing()">
+        </div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>Largeur (WW)</span>
+            <span class="slider-val" id="ww-val">—</span>
+          </div>
+          <input type="range" id="slider-ww" min="1" max="4000" step="1" oninput="updateWindowing()">
+        </div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <div class="meta-card">
+        <div class="meta-card-header">
+          <svg class="mci" viewBox="0 0 24 24" fill="none" stroke="#c8a96e" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          <span>Informations Patient</span>
+        </div>
+        <div class="meta-body" id="meta-patient"></div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-card-header">
+          <svg class="mci" viewBox="0 0 24 24" fill="none" stroke="#c8a96e" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg>
+          <span>Acquisition</span>
+        </div>
+        <div class="meta-body" id="meta-acq"></div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-card-header">
+          <svg class="mci" viewBox="0 0 24 24" fill="none" stroke="#c8a96e" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          <span>Propriétés Image</span>
+        </div>
+        <div class="meta-body" id="meta-img"></div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-card-header">
+          <svg class="mci" viewBox="0 0 24 24" fill="none" stroke="#c8a96e" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <span>Tous les Tags DICOM</span>
+        </div>
+        <div class="tags-search"><input type="text" id="tag-search" placeholder="Filtrer par nom, tag ou valeur…" oninput="filterTags()"></div>
+        <div class="tags-table-wrap">
+          <table class="tags-table">
+            <thead><tr><th>Tag</th><th>Nom</th><th>Valeur</th></tr></thead>
+            <tbody id="tags-body"></tbody>
+          </table>
+        </div>
+        <button class="reset-btn" onclick="document.getElementById('tag-search').value='';filterTags()">Réinitialiser filtre</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ── DICOM PARSER ───────────────────────────────────────────
+const VR_LONG = new Set(['OB','OW','SQ','UC','UN','UR','UT','OD','OF','OL']);
+const TAG_NAMES = {
+  '00080008':'Image Type','00080016':'SOP Class UID','00080018':'SOP Instance UID',
+  '00080020':'Study Date','00080021':'Series Date','00080022':'Acquisition Date',
+  '00080023':'Content Date','00080030':'Study Time','00080031':'Series Time',
+  '00080060':'Modality','00080070':'Manufacturer','00080080':'Institution Name',
+  '00080090':'Referring Physician','00081010':'Station Name','00081030':'Study Description',
+  '0008103E':'Series Description','00081050':'Performing Physician Name',
+  '00100010':'Patient Name','00100020':'Patient ID','00100030':'Patient Birth Date',
+  '00100040':'Patient Sex','00101000':'Other Patient IDs','00101010':'Patient Age',
+  '00101020':'Patient Size','00101030':'Patient Weight','00102000':'Medical Alerts',
+  '00102110':'Allergies','00180015':'Body Part Examined','00180050':'Slice Thickness',
+  '00180060':'KVP','00180088':'Spacing Between Slices','00181030':'Protocol Name',
+  '00185100':'Patient Position','00200010':'Study ID','00200011':'Series Number',
+  '00200013':'Instance Number','00200020':'Patient Orientation',
+  '00200032':'Image Position Patient','00200037':'Image Orientation Patient',
+  '00200052':'Frame of Reference UID','00280002':'Samples Per Pixel',
+  '00280004':'Photometric Interpretation','00280010':'Rows','00280011':'Columns',
+  '00280030':'Pixel Spacing','00280100':'Bits Allocated','00280101':'Bits Stored',
+  '00280102':'High Bit','00280103':'Pixel Representation',
+  '00281050':'Window Center','00281051':'Window Width',
+  '00281052':'Rescale Intercept','00281053':'Rescale Slope',
+  '7FE00010':'Pixel Data'
+};
+
+function getTagName(g,e){
+  const k=(g.toString(16).padStart(4,'0')+e.toString(16).padStart(4,'0')).toUpperCase();
+  return TAG_NAMES[k]||TAG_NAMES[k.toLowerCase()]||`(${g.toString(16).padStart(4,'0')},${e.toString(16).padStart(4,'0')})`;
+}
+
+function parseDICOM(buf){
+  const dv=new DataView(buf);
+  const u8=new Uint8Array(buf);
+  const tags=[];
+  const magic=String.fromCharCode(u8[128],u8[129],u8[130],u8[131]);
+  let offset=magic==='DICM'?132:0;
+
+  while(offset<buf.byteLength-8){
+    try{
+      const group=dv.getUint16(offset,true);
+      const element=dv.getUint16(offset+2,true);
+      offset+=4;
+      if(group===0xFFFE&&(element===0xE0DD||element===0xE00D)){offset+=4;continue;}
+      let vr='UN',length=0;
+      const c1=String.fromCharCode(u8[offset]),c2=String.fromCharCode(u8[offset+1]);
+      const explicitVR=/^[A-Z]{2}$/.test(c1+c2);
+      if(explicitVR){
+        vr=c1+c2;offset+=2;
+        if(VR_LONG.has(vr)){offset+=2;length=dv.getUint32(offset,true);offset+=4;}
+        else{length=dv.getUint16(offset,true);offset+=2;}
+      }else{
+        vr='UN';length=dv.getUint32(offset,true);offset+=4;
+      }
+      if(length===0xFFFFFFFF){length=0;}
+      const tag=`(${group.toString(16).padStart(4,'0')},${element.toString(16).padStart(4,'0')})`;
+      const name=getTagName(group,element);
+      if(group===0x7FE0&&element===0x0010){
+        tags.push({tag,group,element,vr,length,value:buf.slice(offset,offset+length),name});
+        offset+=length;continue;
+      }
+      let value=null;
+      if(length>0&&length<=65536&&offset+length<=buf.byteLength){
+        switch(vr){
+          case 'US':value=length>=2?dv.getUint16(offset,true):0;break;
+          case 'SS':value=length>=2?dv.getInt16(offset,true):0;break;
+          case 'UL':value=length>=4?dv.getUint32(offset,true):0;break;
+          case 'SL':value=length>=4?dv.getInt32(offset,true):0;break;
+          case 'FL':value=length>=4?dv.getFloat32(offset,true):0;break;
+          case 'FD':value=length>=8?dv.getFloat64(offset,true):0;break;
+          default:value=new TextDecoder('latin1').decode(new Uint8Array(buf,offset,length)).replace(/\0/g,'').trim();
+        }
+      }
+      tags.push({tag,group,element,vr,length,value,name});
+      offset+=length;
+    }catch(e){break;}
+  }
+  const ds={_tags:tags};
+  for(const t of tags){
+    const k=(t.group.toString(16).padStart(4,'0')+t.element.toString(16).padStart(4,'0')).toLowerCase();
+    ds[k]=t.value;
+    ds[t.name]=t.value;
+  }
+  return ds;
+}
+
+// ── PIXEL ──────────────────────────────────────────────────
+function extractPixels(ds,rows,cols,bits,signed,pixData){
+  const px=new Float32Array(rows*cols);
+  const view=bits===16?(signed?new Int16Array(pixData):new Uint16Array(pixData)):new Uint8Array(pixData);
+  const slope=parseFloat(ds['Rescale Slope']??1)||1;
+  const intercept=parseFloat(ds['Rescale Intercept']??0)||0;
+  for(let i=0;i<rows*cols&&i<view.length;i++) px[i]=view[i]*slope+intercept;
+  return px;
+}
+
+function render(canvas,px,rows,cols,wc,ww){
+  canvas.width=cols;canvas.height=rows;
+  const ctx=canvas.getContext('2d');
+  const id=ctx.createImageData(cols,rows);
+  const vmin=wc-ww/2,vmax=wc+ww/2;
+  for(let i=0;i<rows*cols;i++){
+    let v=((px[i]-vmin)/(vmax-vmin))*255;
+    v=Math.max(0,Math.min(255,v));
+    id.data[i*4]=v;id.data[i*4+1]=v;id.data[i*4+2]=v;id.data[i*4+3]=255;
+  }
+  ctx.putImageData(id,0,0);
+}
+
+// ── STATE ──────────────────────────────────────────────────
+let gDS=null,gPX=null,gRows=512,gCols=512;
+
+// ── WINDOWING ──────────────────────────────────────────────
+function updateWindowing(){
+  const wc=parseInt(document.getElementById('slider-wc').value);
+  const ww=parseInt(document.getElementById('slider-ww').value);
+  document.getElementById('wc-val').textContent=wc;
+  document.getElementById('ww-val').textContent=ww;
+  document.getElementById('badge-wl').textContent=`WC ${wc} | WW ${ww}`;
+  if(gPX) render(document.getElementById('dicom-canvas'),gPX,gRows,gCols,wc,ww);
+}
+
+// ── META ───────────────────────────────────────────────────
+function gv(ds,...keys){
+  for(const k of keys){
+    if(ds[k]!==undefined&&ds[k]!==null&&String(ds[k]).trim()!=='')
+      return String(ds[k]).trim();
+  }
+  return '—';
+}
+function fd(d){
+  if(!d||d==='—')return '—';
+  const s=String(d).replace(/\D/g,'');
+  if(s.length===8)return `${s.slice(6,8)}/${s.slice(4,6)}/${s.slice(0,4)}`;
+  return d;
+}
+function mkRow(key,val,hl=false){
+  const d=document.createElement('div');
+  d.className='meta-row';
+  d.innerHTML=`<span class="meta-key">${key}</span><span class="meta-value${hl?' hl':''}">${val}</span>`;
+  return d;
+}
+function fillMeta(ds){
+  const mp=document.getElementById('meta-patient');mp.innerHTML='';
+  [[`Nom`,gv(ds,'Patient Name')],[`ID`,gv(ds,'Patient ID')],[`Naissance`,fd(gv(ds,'Patient Birth Date'))],
+   [`Sexe`,gv(ds,'Patient Sex')],[`Âge`,gv(ds,'Patient Age')],
+   [`Taille`,gv(ds,'Patient Size')!=='—'?gv(ds,'Patient Size')+' m':'—'],
+   [`Poids`,gv(ds,'Patient Weight')!=='—'?gv(ds,'Patient Weight')+' kg':'—']
+  ].forEach(([k,v])=>mp.appendChild(mkRow(k,v)));
+
+  const ma=document.getElementById('meta-acq');ma.innerHTML='';
+  [[`Modalité`,gv(ds,'Modality'),true],[`Date étude`,fd(gv(ds,'Study Date'))],
+   [`Description`,gv(ds,'Study Description','Series Description')],[`Institution`,gv(ds,'Institution Name')],
+   [`Fabricant`,gv(ds,'Manufacturer')],[`Médecin réf.`,gv(ds,'Referring Physician')],
+   [`Partie corps`,gv(ds,'Body Part Examined')],[`Protocole`,gv(ds,'Protocol Name')],
+   [`Position`,gv(ds,'Patient Position')]
+  ].forEach(([k,v,h])=>ma.appendChild(mkRow(k,v,!!h)));
+
+  const mi=document.getElementById('meta-img');mi.innerHTML='';
+  [[`Dimensions`,`${gv(ds,'Columns')} × ${gv(ds,'Rows')} px`],
+   [`Bits alloués`,gv(ds,'Bits Allocated')],[`Bits stockés`,gv(ds,'Bits Stored')],
+   [`Échantillons`,gv(ds,'Samples Per Pixel')],[`Photom. Interp.`,gv(ds,'Photometric Interpretation')],
+   [`Pixel Spacing`,gv(ds,'Pixel Spacing')],[`Épaisseur coupe`,gv(ds,'Slice Thickness')],
+   [`Rescale Slope`,gv(ds,'Rescale Slope')],[`Rescale Intercept`,gv(ds,'Rescale Intercept')],
+   [`WC initial`,gv(ds,'Window Center')],[`WW initial`,gv(ds,'Window Width')]
+  ].forEach(([k,v])=>mi.appendChild(mkRow(k,v)));
+}
+
+let allTags=[];
+function fillTags(ds){
+  allTags=ds._tags.filter(t=>t.name!=='Pixel Data'&&t.name!=='7fe00010').map(t=>({
+    tag:t.tag,name:t.name,value:t.value!==null&&t.value!==undefined?String(t.value).substring(0,200):'—'
+  }));
+  renderTags(allTags);
+}
+function renderTags(data){
+  const tb=document.getElementById('tags-body');tb.innerHTML='';
+  for(const r of data){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.tag}</td><td>${r.name}</td><td>${r.value}</td>`;
+    tb.appendChild(tr);
+  }
+}
+function filterTags(){
+  const q=document.getElementById('tag-search').value.toLowerCase();
+  if(!q){renderTags(allTags);return;}
+  renderTags(allTags.filter(r=>r.name.toLowerCase().includes(q)||r.value.toLowerCase().includes(q)||r.tag.toLowerCase().includes(q)));
+}
+
+// ── FILE LOAD ──────────────────────────────────────────────
+function loadFile(file){
+  if(!file)return;
+  showLoad(true);
+  const fr=new FileReader();
+  fr.onload=function(e){
+    try{
+      const ds=parseDICOM(e.target.result);
+      gDS=ds;
+      const rows=parseInt(ds['Rows']||ds['00280010'])||512;
+      const cols=parseInt(ds['Columns']||ds['00280011'])||512;
+      const bits=parseInt(ds['Bits Allocated']||ds['00280100'])||16;
+      const pRep=parseInt(ds['Pixel Representation']||ds['00280103'])||0;
+      const pixData=ds['Pixel Data']||ds['7fe00010'];
+      if(!pixData)throw new Error('Aucune donnée pixel trouvée dans ce fichier DICOM.');
+      gRows=rows;gCols=cols;
+      gPX=extractPixels(ds,rows,cols,bits,pRep===1,pixData);
+
+      let wc=parseFloat(ds['Window Center']||ds['00281050'])||40;
+      let ww=parseFloat(ds['Window Width']||ds['00281051'])||400;
+      if(String(wc).includes('\\'))wc=parseFloat(String(wc).split('\\')[0]);
+      if(String(ww).includes('\\'))ww=parseFloat(String(ww).split('\\')[0]);
+
+      document.getElementById('slider-wc').value=wc;
+      document.getElementById('slider-ww').value=ww;
+      document.getElementById('wc-val').textContent=Math.round(wc);
+      document.getElementById('ww-val').textContent=Math.round(ww);
+      document.getElementById('badge-wl').textContent=`WC ${Math.round(wc)} | WW ${Math.round(ww)}`;
+
+      render(document.getElementById('dicom-canvas'),gPX,rows,cols,wc,ww);
+
+      const mod=gv(ds,'Modality');
+      document.getElementById('ov-patient').innerHTML=gv(ds,'Patient Name')+'<br>'+gv(ds,'Patient ID');
+      document.getElementById('ov-study').innerHTML=mod+'<br>'+fd(gv(ds,'Study Date'));
+      document.getElementById('ov-pixel').textContent=`${cols} × ${rows}`;
+      document.getElementById('ov-date').textContent=fd(gv(ds,'Content Date','Study Date'));
+      document.getElementById('toolbar-dims').textContent=`${cols} × ${rows} px — ${bits}bit`;
+      document.getElementById('badge-modality').textContent=mod||'DICOM';
+      document.getElementById('file-status').textContent=file.name;
+
+      fillMeta(ds);fillTags(ds);
+
+      document.getElementById('upload-section').style.display='none';
+      document.getElementById('viewer-section').classList.add('visible');
+      showLoad(false);
+    }catch(err){showLoad(false);showToast('Erreur : '+err.message);}
+  };
+  fr.onerror=()=>{showLoad(false);showToast('Impossible de lire ce fichier.');};
+  fr.readAsArrayBuffer(file);
+}
+
+function resetViewer(){
+  gDS=null;gPX=null;
+  document.getElementById('viewer-section').classList.remove('visible');
+  document.getElementById('upload-section').style.display='';
+  document.getElementById('file-status').textContent='Aucun fichier chargé';
+  document.getElementById('file-input').value='';
+}
+
+function handleDragOver(e){e.preventDefault();document.getElementById('drop-zone').classList.add('drag-over')}
+function handleDragLeave(){document.getElementById('drop-zone').classList.remove('drag-over')}
+function handleDrop(e){e.preventDefault();document.getElementById('drop-zone').classList.remove('drag-over');if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);}
+function showLoad(on){document.getElementById('loading-overlay').classList.toggle('show',on)}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),5000)}
+
+function enterApp(){
+  document.getElementById('splash').classList.add('hide');
+  setTimeout(()=>{
+    document.getElementById('splash').style.display='none';
+    document.getElementById('app').classList.add('visible');
+  },900);
+}
+</script>
+</body>
+</html>
